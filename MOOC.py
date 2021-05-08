@@ -1,5 +1,5 @@
-import random
 import sys
+import shutil
 from tqdm import tqdm
 import requests
 import time
@@ -7,11 +7,11 @@ from requests.utils import dict_from_cookiejar, cookiejar_from_dict
 import json
 import re
 import string
-from urllib import parse
 from docx import Document
 import os
 from docx.oxml.ns import qn
 from docx.shared import RGBColor
+from ffmpy import FFmpeg
 
 
 class mooc_login():
@@ -46,6 +46,16 @@ class mooc_login():
         with open('core\QR.png', 'wb') as f:
             f.write(content)
         os.startfile('core\QR.png')
+
+        # barcode_url = ''
+        # barcodes = decode(Image.open('core/QR.png'))
+        # for barcode in barcodes:
+        #     barcode_url = barcode.data.decode("utf-8")
+        # # print(barcode_url)
+        # qr = qrcode.QRCode()
+        # qr.add_data(barcode_url)
+        # # invert=True白底黑块,有些app不识别黑底白块.
+        # qr.print_ascii(invert=True)
 
     def get_status(self, pollKey):
         url = 'https://www.icourse163.org/logonByQRCode/poll.do?pollKey={}'.format(pollKey)
@@ -115,8 +125,10 @@ class mooc_login():
                 # 删除存在的失效cookie
                 self.session.cookies.clear()
                 self.save_cookie()
+                os.remove('core/QR.png')
         else:
             self.save_cookie()
+            os.remove('core/QR.png')
 
         self.session.headers = {
             "sec-ch-ua": '"Google Chrome";v="89", "Chromium";v="89", ";Not A Brand";v="99"',
@@ -127,6 +139,7 @@ class mooc_login():
             "upgrade-insecure-requests": "1",
             "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.72 Safari/537.3",
         }
+
         return self.session
 
 
@@ -192,14 +205,12 @@ class mooc_spider():
         timestamp = int(time.time() * 1000)
         return str(timestamp)
 
-    # httpSessionId
+    # httpSessionId  NTESSTUDYSI
     def get_NTESSTUDYSI(self):
         NTESSTUDYSI = dict_from_cookiejar(self.session.cookies)["NTESSTUDYSI"]
         return NTESSTUDYSI
 
-    # 获取测验相关信息
-    def get_test_info(self, courses_id):
-        test_name_id_dic = {}
+    def get_course_text(self, courses_id):
         url = "https://www.icourse163.org/dwr/call/plaincall/CourseBean.getLastLearnedMocTermDto.dwr"
         data = {
             'callCount': '1',
@@ -213,391 +224,371 @@ class mooc_spider():
         }
         response = self.session.post(url=url, data=data)
         text = response.text.encode('utf8').decode('unicode-escape')
-        option_text_list = re.findall('type.*?allowUpload|type.*?dwr\.engine', text, re.S)
+        return text
+
+    '''
+    下面是测验爬取
+    '''
+
+    # ------------------------------------------------------------------------------------------------
+    # 获取测验相关信息
+    def get_test_info(self, text):
+        test_name_id_dic = {}
+        # id_name_list = re.findall(
+        #     's\d{1,3}\.id=(\d+);s\d{1,3}\.name="(.*?测试.*?)";|s\d{1,3}\.id=(\d+);s\d{1,3}\.name="(.*?测验.*?)";', text)
         id_name_list = re.findall(
-            's\d{1,3}\.id=(\d+);s\d{1,3}\.name="(.*?测试.*?)";|s\d{1,3}\.id=(\d+);s\d{1,3}\.name="(.*?测验.*?)";', text)
+            's\d{1,3}\.id=(\d+);s\d{1,3}\.name="(.*?)";', text)
         for id_name in id_name_list:
-            if id_name[0] != '' and id_name[1] != '':
-                test_id = id_name[0]
-                test_name = id_name[1]
-            else:
-                test_id = id_name[2]
-                test_name = id_name[3]
-            test_name_id_dic[test_name] = test_id
+            test_id = id_name[0]
+            test_name = id_name[1]
+            # for id_name in id_name_list:
+            #     if id_name[0] != '' and id_name[1] != '':
+            #         test_id = id_name[0]
+            #         test_name = id_name[1]
+            #     else:
+            #         test_id = id_name[2]
+            #         test_name = id_name[3]
+            data = {
+                'callCount': '1',
+                'scriptSessionId': '${scriptSessionId}190',
+                'httpSessionId': self.get_NTESSTUDYSI(),
+                'c0-scriptName': 'MocQuizBean',
+                'c0-methodName': 'getQuizPaperDto',
+                'c0-id': '0',
+                'c0-param0': f'string:{test_id}',
+                'c0-param1': 'number:0',
+                'c0-param2': 'boolean:false',
+                'batchId': '1619443609960',
+            }
+            url = 'https://www.icourse163.org/dwr/call/plaincall/MocQuizBean.getQuizPaperDto.dwr'
+            response = self.session.post(url=url, data=data)
+            text = response.text
+            aid = re.findall('{aid:(\d+),', text)
+            test_name_id_dic[test_name] = aid
+            time.sleep(1.5)
         return test_name_id_dic
 
-    def submit_paper(self, test_id):
-        data = {
-            'callCount': '1',
-            'scriptSessionId': '${scriptSessionId}190',
-            'httpSessionId': self.get_NTESSTUDYSI(),
-            'c0-scriptName': 'MocQuizBean',
-            'c0-methodName': 'getQuizPaperDto',
-            'c0-id': '0',
-            'c0-param0': 'string:{}'.format(test_id),
-            'c0-param1': 'number:0',
-            'c0-param2': 'boolean:false',
-            'batchId': self.get_timestamp(),
-        }
-        url = "https://www.icourse163.org/dwr/call/plaincall/MocQuizBean.getQuizPaperDto.dwr"
-        response = self.session.post(url=url, data=data)
-        text = response.text.encode('utf-8').decode('unicode-escape')
-        option_text_list = re.findall('type.*?allowUpload|type.*?dwr\.engine', text, re.S)
-        content_id_list = []
-        for option_text in option_text_list:
-            content_id = re.findall('content="(.*?)";s\d+\.id=(\d+);', option_text, re.S)
-            content_id_list.append(content_id)
-        option_dict = {'analyse': '', 'answer': '', 'content': '', 'id': '', 'selectCount': ''}
-        aid, tid, tname, end_type = \
-            re.findall('dwr.engine.*?aid:(\d+),.*?tid:(\d+),tname:"(.*?)",type:(\d+)}', text, re.S)[0]
-        submit_data = {
-            "callCount": '1',
-            "scriptSessionId": '${scriptSessionId}190',
-            'httpSessionId': self.get_NTESSTUDYSI(),
-            'c0-scriptName': 'MocQuizBean',
-            'c0-methodName': 'submitAnswers',
-            'c0-id': '0',
-            "c0-e1": "number:{}".format(aid),
-            "c0-e2": "null:null",
-            "c0-e3": "boolean:false",
-            "c0-e4": "null:null",
-        }
-        list_0 = re.findall("s\d+\.allowUpload.*?type=\d+;", text, re.S)
-        id_list = []
-        plainTextTitle_list = []
-        score_list = []
-        title_list = []
-        type_list = []
-        position_list = []
-        for i in list_0:
-            id = re.findall("s\d+\.id=(.*?);", i)
-            id_list.extend(id)
-
-            plainTextTitle = re.findall('s\d+\.plainTextTitle="(.*?)";', i)
-            plainTextTitle_list.extend(plainTextTitle)
-
-            score = re.findall('s\d+\.score=(.*?);', i)
-            score_list.extend(score)
-
-            title = re.findall('s\d+\.title="(.*?)";s\d+\.titleAttachment', i, re.S)
-            title_list.extend(title)
-
-            type = re.findall('s\d+\.type=(.*?);', i)
-            type_list.extend(type)
-
-            position = re.findall('s\d+\.position=(.*?);', i)
-            position_list.extend(position)
-
-        Object_Object_dict = {"allowUpload": "", 'analyse': '', 'description': '', 'fillblankType': '', 'gmtCreate': '',
-                              'gmtModified': '', 'id': '', 'judgeDtos': '', 'judgerules': '', 'ojCases': '',
-                              'ojMemLimit': '',
-                              'ojNeedInput': '', 'ojSupportedLanguage': '', 'ojSupportedLanguageList': '',
-                              'ojTimeLimit': '',
-                              'ojTryTime': '', 'optionDtos': '', 'options': '', 'plainTextTitle': '', 'position': '',
-                              'sampleAnswerJson': '', 'sampleAnswers': '', 'score': '', 'stdAnswer': '', 'testId': '',
-                              'title': '',
-                              'titleAttachment': '', 'titleAttachmentDtos': '', 'type': ''}
-        num = len(list_0)
-        Array = []
-        sum = 6
-        for n_0 in range(num):
-            if len(content_id_list[n_0]) == 4:
-                Array.append("reference:c0-e{}".format(sum))
-                sum += 54
-            else:
-                Array.append("reference:c0-e{}".format(sum))
-                sum += 42
-
-        submit_data["c0-e5"] = "Array:{}".format(Array)
-        # Array
-        for n in range(num):
-            key = Array[n].split(":")[-1]
-            num = int(Array[n].split("e")[-1])
-            num0 = num
-
-            id = id_list[n]
-            plainTextTitle = plainTextTitle_list[n]
-            score = score_list[n]
-            title = title_list[n]
-            type = type_list[n]
-            position = position_list[n]
-
-            for key0 in Object_Object_dict.keys():
-                if num0 <= num + 16:
-                    Object_Object_dict[key0] = "reference:c0-e{}".format(num0 + 1)
-                else:
-                    if len(content_id_list[n]) == 4:
-                        Object_Object_dict[key0] = "reference:c0-e{}".format(num0 + 25)
-                    else:
-                        Object_Object_dict[key0] = "reference:c0-e{}".format(num0 + 13)
-                num0 += 1
-            submit_data[key] = "Object_Object:{}".format(Object_Object_dict)
-            # Object_Object
-            for key_0, value in Object_Object_dict.items():
-                key1 = value.split(":")[-1]
-                if key_0 == "id":
-                    submit_data[key1] = "number:{}".format(id)
-                elif key_0 == "plainTextTitle":
-                    submit_data[key1] = "string:{}".format(parse.quote(plainTextTitle))
-                elif key_0 == "score":
-                    score = float(score)
-                    if score >= 1:
-                        score = round(score, 0)
-                    else:
-                        score = round(score, 1)
-                    submit_data[key1] = "number:{}".format(score)
-                elif key_0 == "title":
-                    submit_data[key1] = "string:{}".format(parse.quote(title))
-                elif key_0 == "position":
-                    submit_data[key1] = "number:{}".format(position)
-                elif key_0 == "type":
-                    submit_data[key1] = "number:{}".format(type)
-                elif key_0 == "optionDtos":
-                    option_list0 = content_id_list[n]
-                    Array0 = []
-                    num1 = int(key1.split('e')[-1]) + 1
-                    for i0 in range(len(option_list0)):
-                        Array0.append("reference:c0-e{}".format(num1 + 6 * i0))
-
-                    for i1 in range(len(Array0)):
-                        content, id = option_list0[i1]
-                        key2 = Array0[i1].split(":")[-1]
-                        num2 = int(key2.split("e")[-1])
-                        num3 = num2 + 1
-                        for key3 in option_dict.keys():
-                            option_dict[key3] = "reference:c0-e{}".format(num3)
-                            num3 += 1
-
-                        for key3, value3 in option_dict.items():
-                            key4 = value3.split(":")[-1]
-                            if key3 == "id":
-                                submit_data[key4] = "number:{}".format(id)
-                            elif key3 == "content":
-                                submit_data[key4] = "string:{}".format(parse.quote(content))
-                            else:
-                                submit_data[key4] = "null:null"
-                        submit_data[key2] = "Object_Object:{}".format(option_dict)
-                    submit_data[key1] = "Array:{}".format(Array0)
-
-                else:
-                    submit_data[key1] = "null:null"
-                del submit_data[key]
-                submit_data[key] = "Object_Object:{}".format(Object_Object_dict)
-
-        del submit_data["c0-e5"]
-        submit_data["c0-e5"] = "Array:{}".format(Array)
-        end_num = int(list(submit_data.keys())[-4].split("e")[-1]) + 2
-        dict0 = {'aid': 'reference:c0-e1', 'answers': 'reference:c0-e2', 'autoSubmit': 'reference:c0-e3',
-                 'evaluateVo': 'reference:c0-e4', 'objectiveQList': 'reference:c0-e5', 'showAnalysis': '',
-                 'subjectiveQList': '', 'submitStatus': '', 'tid': '', 'tname': '', 'type': ''}
-        list0 = ['showAnalysis', 'subjectiveQList', 'submitStatus', 'tid', 'tname', 'type']
-        for i in list0:
-            key = "c0-e{}".format(end_num)
-            if i == 'showAnalysis':
-                submit_data[key] = "boolean:true"
-            elif i == "subjectiveQList":
-                submit_data[key] = "Array:[]"
-            elif i == "submitStatus":
-                submit_data[key] = "number:1"
-            elif i == "tid":
-                submit_data[key] = "number:{}".format(tid)
-            elif i == "tname":
-                submit_data[key] = "string:{}".format(parse.quote(tname))
-            else:
-                submit_data[key] = "number:{}".format(end_type)
-            dict0[i] = "reference:{}".format(key)
-            end_num += 1
-        supplement_dict = {
-            'c0-param0': "Object_Object:{}".format(dict0),
-            'c0-param1': "boolean:false",
-            'batchId': self.get_timestamp(),
-        }
-        submit_data.update(supplement_dict)
-        submit_data0 = {}
-        for k, j in submit_data.items():
-            submit_data0[k.replace(" ", "")] = j.replace("'", "").replace("/", "%2F").replace('https', 'http').replace(
-                ' ', '')
-        time.sleep(1)
-        url = "https://www.icourse163.org/dwr/call/plaincall/MocQuizBean.submitAnswers.dwr"
-        self.session.post(url=url, data=submit_data0)
-        return aid, tid
-
-    def get_paper(self, aid, tid):
-        Answer_list = []
-        data = {
-            'callCount': '1',
-            'scriptSessionId': '${scriptSessionId}190',
-            'httpSessionId': self.get_NTESSTUDYSI(),
-            'c0-scriptName': 'MocQuizBean',
-            'c0-methodName': 'getQuizPaperDto',
-            'c0-id': '0',
-            'c0-param0': 'string:{}'.format(tid),
-            'c0-param1': 'number:{}'.format(aid),
-            'c0-param2': 'boolean:true',
-            'batchId': self.get_timestamp(),
-        }
-        url = "https://www.icourse163.org/dwr/call/plaincall/MocQuizBean.getQuizPaperDto.dwr"
-        response = self.session.post(url=url, data=data)
-        text = response.text.encode('utf-8').decode('unicode-escape')
-
-        '''题目处理'''
-        # 题目信息截取
-        title_list = re.findall('title="<p(.*?<)/p>";s\d+\.titleAttachment', text, re.S)
-        end_title_list = []
-        for title in title_list:
-            title = re.sub('<span style=".*?;"  >|</span>|&nbsp;|(&gt;1)', '', title)
-            list_0 = re.findall('"http.*?"|>.*?<', title)
-            title_end_list = []
-            for i in list_0:
-                if 'http' in i:
-                    list0 = re.findall('"http.*?"|>.*?<', i)
-                    for n in range(len(list0)):
-                        list0[n] = re.sub('<br >|"|<p>|</p>|</em>|>|<|><"', '', list0[n])
-                        if list0[n] != '':
-                            title_end_list.append(list0[n])
-                else:
-                    i = re.sub('<br >|"|<p>|</p>|</em>|>|<', '', i)
-                    if i != '':
-                        title_end_list.append(i)
-            tpl = tuple(title_end_list)
-            end_title_list.append(tpl)
-
-        '''选项处理'''
-        # 选项截取下来
-        option_text_list = re.findall('type.*?allowUpload|type.*?dwr\.engine', text, re.S)
-        stdAnswer_list = re.findall('s\d+\.stdAnswer=(.*?);', text)
-        option_max_list = []
-        n_1 = 0
-        for option_text in option_text_list:
-            option_text = re.sub('<span style=".*?"  >|</span>|&nbsp;|<em style=".*?"  >', '', option_text)
-            '''每个题目里的选项截取'''
-            # 答案截取
-            answer_list = re.findall('s\d+\.answer=(.*?);|s\d+\.stdAnswer="(.*?)";', option_text)
-            answer_list = [i[0] for i in answer_list]
-            if answer_list == []:
-                text0 = stdAnswer_list[n_1]
-                answer_list.append(text0)
-            n_1 += 1
-
-            str0 = string.ascii_uppercase
-            answer0 = ''
-            if len(answer_list) == 1:
-                answer0 = re.sub('"', '', answer_list[0])
-            else:
-                for n0 in range(len(answer_list)):
-                    if answer_list[n0] == 'true':
-                        answer0 += str0[n0]
-            Answer_list.append(answer0)
-            list1 = re.findall('content="(.*?)";s\d+\.id', option_text)
-            option_list = []
-            for i in list1:
-                i = re.sub('<p style=".*?;"  >', '', i)
-                if 'src' in i:
-                    list0 = re.findall('"http.*?"|>.*?<', i)
-                    for n in range(len(list0)):
-                        list0[n] = re.sub('"|<p>|</p>|</em>|>|<', '', list0[n])
-                    option_list.append(list0)
-                else:
-                    i = re.sub('<br >|<p>|</p>|</em>|>|<', '', i)
-                    option_list.append(i)
-            option_max_list.append(option_list)
-        end_option_list = []
-        for option_list in option_max_list:
-            num = len(option_list)
-            str_list = list(string.ascii_uppercase)[:num]
-            dic = dict(zip(str_list, option_list))
-            end_option_list.append(dic)
-        paper_dic = dict(zip(end_title_list, end_option_list))
-        return paper_dic, Answer_list
-
-    def word(self, paper_dic, Answer_list, path, test_name):
+    def save_img(self, url):
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36',
         }
+        response = requests.get(url=url, headers=headers)
+        content = response.content
+        with open('core\paper.png', 'wb') as f:
+            f.write(content)
+        return
+
+    def get_paper(self, aid):
+        url = "https://www.icourse163.org/mob/course/paperDetail/v1"
+        data = {
+            "mob-token": "d6dbe470975c1e411442686996218e49e2a8d084dd67e087e19a94a9b58fd537e0aaa719763eaa7cf3f592bf43a75665af8a8a488536a10030490cd75e4c93b1935c300b4df0b319e73756c2bf4f77453fe82d8881bd18d30e2ebd9980e23f4b0d7ef1ee30366d043e17db84286433cea05f7dfa572380889dc5f9487881ea827610539dc81b92fdbdf29d78a6ea65037f9085857f5ac3a9dcf8392a8ff2c17c8676b27e0d374f2f0db184284eeb568ef068144cfcbaf5b449620a83b20dcbf5",
+            "testId": "2222", "isExercise": "false", "aId": aid, "withStdAnswerAndAnalyse": "true"}
+        headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                   'user-agent': "Dalvik/2.1.0 (Linux; U; Android 8.1.0; Pixel Build/OPM4.171019.021.P1)", }
+        response = requests.post(url, data=data, headers=headers)
+        objective_dic = {}
+        try:
+            objectiveQList = response.json()['results']['mocPaperDto']['objectiveQList']
+            for i in range(len(objectiveQList)):
+                objective = objectiveQList[i]
+                plainTextTitle = objective['plainTextTitle']
+                if '【图片】' in plainTextTitle:
+                    title = objective['title']
+                    src_list = re.findall('src="(.*?)"', title)
+                    for m in range(len(src_list)):
+                        plainTextTitle = re.sub('【图片】', ',{},'.format(src_list[m]), plainTextTitle, count=1)
+                optionDtos_list = objective['optionDtos']
+                str = string.ascii_uppercase
+                optionDtos_dic = {}
+                answer = ''
+                if optionDtos_list != []:
+                    for n in range(len(optionDtos_list)):
+                        optionDtos = optionDtos_list[n]
+                        content = optionDtos['content']
+                        content = re.sub('<span style.*?>|"|<p>|</p>|</span>|&nbsp;|<br >|', '', content)
+                        content = re.sub('<span style=font-size:\d+px;font-family:\n;  >', '', content, re.S)
+                        if '<img' in content:
+                            src_list = re.findall('src=(.*?)/>', content)
+                            for m in range(len(src_list)):
+                                content = re.sub('<img .*?src=.*?/>|" "', ',{},'.format(src_list[m]), content, count=1)
+                        optionDtos_dic[str[n]] = content.split(',')
+                        if optionDtos['answer'] == True:
+                            answer = str[n]
+                        n += 1
+                else:
+                    answer = objective['stdAnswer']
+                num = i + 1
+                objective_dic[num] = {}
+                objective_dic[num]['plainTextTitle'] = plainTextTitle.split(',')
+                objective_dic[num]['option'] = optionDtos_dic
+                objective_dic[num]['answer'] = answer
+        except:
+            pass
+        return objective_dic
+
+    def word(self, objective_dic, path, test_name):
         # 试卷document
         document = Document()
         document.styles['Normal'].font.name = u'宋体'
         document.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), u'宋体')
         document.styles['Normal'].font.color.rgb = RGBColor(0, 0, 0)
-        num = 1
-        for title_list, option_dic in tqdm(paper_dic.items(), desc=test_name):
-            '''开启一个新段落'''
-            paragraph = document.add_paragraph('{},'.format(num))
+        for title_num, objective in tqdm(objective_dic.items(), desc=test_name):
+            #     '''开启一个新段落'''
+            paragraph = document.add_paragraph('{},'.format(title_num))
             # 设置行距
             paragraph_format = paragraph.paragraph_format
             paragraph_format.line_spacing = 1.5  # 1.5倍行距
             run = document.paragraphs[-1].add_run()
-            for i in title_list:
-                if 'http' in i:
-                    try:
-                        url = i
-                        response = requests.get(url=url, headers=headers)
-                        content = response.content
-                        with open('core\paper.png', 'wb') as f:
-                            f.write(content)
-                        run.add_picture('core\paper.png')
-
-                    except:
-                        if "imageView" in i:
-                            url = i
-                        else:
-                            url = "https://img-ph-mirror.nosdn.127.net" + i.split("net")[-1]
-                        response = requests.get(url=url, headers=headers)
-                        content = response.content
-                        with open('core\paper.png', 'wb') as f:
-                            f.write(content)
-                        run.add_picture('core\paper.png')
-                else:
-                    try:
-                        if i != '':
-                            run.add_text(u'{}'.format(i))
-                    except:
-                        pass
-
-            '''key,为ABCD等,'''
-            for key, option_list in option_dic.items():
-                '''开启一个新段落,value为option_list'''
-                paragraph = document.add_paragraph('{},'.format(key))
-                # 设置行距
-                paragraph_format = paragraph.paragraph_format
-                paragraph_format.line_spacing = 1.5  # 1.5倍行距
-                run = document.paragraphs[-1].add_run()
-                for i in option_list:
+            # 题目信息
+            plainTextTitle = objective['plainTextTitle']
+            for i in plainTextTitle:
+                try:
                     if 'http' in i:
-                        try:
-                            url = i
-                            response = requests.get(url=url, headers=headers)
-                            content = response.content
-                            with open('core\paper.png', 'wb') as f:
-                                f.write(content)
-                            run.add_picture('core\paper.png')
-
-                        except:
-                            if "imageView" in i:
-                                url = i
-                            else:
-                                url = "https://img-ph-mirror.nosdn.127.net" + i.split("net")[-1]
-                            response = requests.get(url=url, headers=headers)
-                            content = response.content
-                            with open('core\paper.png', 'wb') as f:
-                                f.write(content)
-                            run.add_picture('core\paper.png')
-
+                        url = i.replace('  ', '')
+                        self.save_img(url)
+                        run.add_picture('core\paper.png')
+                    elif '//nos.netease.com/edu-image' in i:
+                        url = ('http:' + i).replace('  ', '')
+                        self.save_img(url)
+                        run.add_picture('core\paper.png')
                     else:
+                        run.add_text(u'{}'.format(i))
+                except:
+                    pass
+            # 选项
+            option = objective['option']
+            if option != {}:
+                for key, value in option.items():
+                    '''key代表选项ABCD,value代表选项内容，是一个列表'''
+                    '''开启一个新段落'''
+                    paragraph = document.add_paragraph('{},'.format(key))
+                    # 设置行距
+                    paragraph_format = paragraph.paragraph_format
+                    paragraph_format.line_spacing = 1.5  # 1.5倍行距
+                    run = document.paragraphs[-1].add_run()
+                    for m in value:
                         try:
-                            if i != '':
-                                run.add_text(u'{}'.format(i))
+                            if 'http' in m:
+                                url = m.replace('  ', '')
+                                self.save_img(url)
+                                run.add_picture('core\paper.png')
+                            elif '//nos.netease.com/edu-image' in m:
+                                url = ('http:' + m).replace('  ', '')
+                                self.save_img(url)
+                                run.add_picture('core\paper.png')
+                            else:
+                                run.add_text(u'{}'.format(m))
                         except:
                             pass
-
+            else:
+                pass
+            '''答案'''
+            answer = objective['answer']
             '''开启一个新段落'''
-            paragraph = document.add_paragraph('答案:{}'.format(Answer_list[num - 1]))
+            paragraph = document.add_paragraph('答案:{}'.format(answer))
             # 设置行距
             paragraph_format = paragraph.paragraph_format
             paragraph_format.line_spacing = 1.5  # 1.5倍行距
-            num += 1
+            document.save('{}/{}.docx'.format(path, test_name))
 
-        document.save('{}/{}_{}.docx'.format(path, test_name, int(time.time())))
+    # -------------------------------------------------------------------------------------------------
+    def get_info_name_id(self, text):
+        """
+        获取视频等资料的，名字与id
+        :param text: text为从返回的信息中提取我们需要的参数
+        :return:dict_document, other_dict, dict_movie,xmind分别为ppt的名字与id，ppt的名字与id，其它资料的名字与id，视频的名字与id，
+                        xmind为整个课程的逻辑，讨论，作业，不在里面显示
+        """
+        lis = re.findall('s1\[\d+]=(s\d+)', text)
+        num = len(lis)
+        dict_document = {}
+        dict_movie = {}
+        other_dict = {}
+        xmind = ""
+        for i in range(num):
+            if i == num - 1:
+                chapter = re.findall(f'{lis[i]}\.contentId.*?dwr\.engine', text, re.S)[0]
+                chapter_name = re.findall('lessons=s\d+;s\d+\.name="(.*?)";', chapter)[0]
+                xmind += f"|--->>{chapter_name}\n"
+                lis1 = re.findall(
+                    'contentId=(\d+);s\d+\.contentType=([0-4]|[7-9]);.*?s\d+.id=(\d+).*?name="(.*?)";.*?yktRelatedLiveInfo',
+                    chapter)
+                for i in lis1:
+                    contentId, contentType, id, name = i
+                    if int(contentType) == 1:
+                        dict_movie[name] = {}
+                        dict_movie[name]['contentId'] = contentId
+                        dict_movie[name]['id'] = id
+                    elif int(contentType) == 3:
+                        dict_document[name] = {}
+                        dict_document[name]['contentId'] = contentId
+                        dict_document[name]['id'] = id
+                    else:
+                        other_dict[name] = {}
+                        other_dict[name]['contentId'] = contentId
+                        other_dict[name]['id'] = id
+                    xmind += f"|----------{name}\n"
+            else:
+
+                chapter = re.findall(f'{lis[i]}\.contentId.*?{lis[i + 1]}\.contentId', text, re.S)[0]
+                chapter_name = re.findall('lessons=s\d+;s\d+\.name="(.*?)";', chapter)[0]
+                xmind += f"|--->>{chapter_name}\n"
+                lis1 = re.findall(
+                    'contentId=(\d+);s\d+\.contentType=([0-4]|[7-9]);.*?s\d+.id=(\d+).*?name="(.*?)";.*?yktRelatedLiveInfo',
+                    chapter)
+                for i in lis1:
+                    contentId, contentType, id, name = i
+                    if int(contentType) == 1:
+                        dict_movie[name] = {}
+                        dict_movie[name]['contentId'] = contentId
+                        dict_movie[name]['id'] = id
+                    elif int(contentType) == 3:
+                        dict_document[name] = {}
+                        dict_document[name]['contentId'] = contentId
+                        dict_document[name]['id'] = id
+                    else:
+                        other_dict[name] = {}
+                        other_dict[name]['contentId'] = contentId
+                        other_dict[name]['id'] = id
+                    xmind += f"|----------{name}\n"
+        print(xmind)
+
+        return dict_document, other_dict, dict_movie
+
+    def download_ppt(self, dict_document, path):
+        url = 'https://www.icourse163.org/dwr/call/plaincall/CourseBean.getLessonUnitLearnVo.dwr'
+        for name, value in dict_document.items():
+            contentId = value['contentId']
+            id = value['id']
+            payload = {
+                'callCount': '1',
+                'scriptSessionId': '${scriptSessionId}190',
+                'httpSessionId': self.get_NTESSTUDYSI(),
+                'c0-scriptName': 'CourseBean',
+                'c0-methodName': 'getLessonUnitLearnVo',
+                'c0-id': '0',
+                'c0-param0': f'number:{contentId}',
+                'c0-param1': 'number:3',
+                'c0-param2': 'number:0',
+                'c0-param3': f'number:{id}',
+                'batchId': self.get_timestamp(),
+            }
+            response = self.session.post(url=url, data=payload)
+            text = response.text
+            ppt_url = re.findall('textUrl:"(.*?)",', text)[0]
+            response = requests.get(url=ppt_url)
+            temp_size = 0  # 已经下载文件大小
+            chunk_size = 1024  # 每次下载数据大小
+            start = time.time()
+            total_size = int(response.headers.get("Content-Length"))
+            with open(fr'{path}\{name}.pdf', 'wb') as f:
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        temp_size += len(chunk)
+                        f.write(chunk)
+                        f.flush()
+                        #############花哨的下载进度部分###############
+                        done = int(50 * temp_size / total_size)
+                        # 调用标准输出刷新命令行，看到\r 回车符了吧
+                        # 相当于把每一行重新刷新一遍
+                        sys.stdout.write(
+                            "\r[%s%s] %d%%" % ('█' * done, ' ' * (50 - done), 100 * temp_size / total_size))
+                        sys.stdout.flush()
+            print()  # 避免上面\r 回车符，执行完后需要换行了，不然都在一行显示
+            end = time.time()  # 结束时间
+            print(f'{name}下载完成!用时%.2f 秒' % (end - start))
+
+    def handle_ts(self, text, y, m, d, name, save_path):
+        if os.path.exists('ts') == False:
+            os.mkdir('ts')
+        ts_list = re.findall('.*?ts', text)
+        headers = {
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.85 Safari/537.36',
+        }
+        num = len(ts_list)
+        path_list = [fr'ts\00{i}.ts' for i in range(num)]
+        for i in range(num):
+            ts = ts_list[i]
+            url = f'https://mooc2vod.stu.126.net/nos/hls/{y}/{m}/{d}/{ts}'
+            response = requests.get(url=url, headers=headers)
+            path = fr'ts\00{i}.ts'
+            temp_size = 0  # 已经下载文件大小
+            chunk_size = 1024  # 每次下载数据大小
+            start = time.time()
+            total_size = int(response.headers.get("Content-Length"))
+            with open(path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        temp_size += len(chunk)
+                        f.write(chunk)
+                        f.flush()
+                        #############花哨的下载进度部分###############
+                        done = int(50 * temp_size / total_size)
+                        # 调用标准输出刷新命令行，看到\r 回车符了吧
+                        # 相当于把每一行重新刷新一遍
+                        sys.stdout.write(
+                            "\r[%s%s] %d%%" % ('█' * done, ' ' * (50 - done), 100 * temp_size / total_size))
+                        sys.stdout.flush()
+            print()  # 避免上面\r 回车符，执行完后需要换行了，不然都在一行显示
+            end = time.time()  # 结束时间
+            print(f'ts{i+1}下载完成!用时%.2f 秒' % (end - start))
+
+        ff = FFmpeg(inputs={'concat:' + '|'.join(path_list): None},
+                    outputs={fr'{save_path}\{name}': '-loglevel quiet -c copy -absf aac_adtstoasc -movflags faststart'})
+        print(f'----------》》》{name}完成!')
+        ff.run()
+        shutil.rmtree('ts')
+        return
+
+    def download_movie(self, dict_movie, path, Video_quality):
+        url = 'https://www.icourse163.org/web/j/resourceRpcBean.getResourceToken.rpc'
+        params = {
+            'csrfKey': self.get_NTESSTUDYSI()
+        }
+        for name, value in dict_movie.items():
+            id = value['id']
+            data = {
+                'bizId': id,
+                'bizType': '1',
+                'contentType': '1',
+            }
+            response = self.session.post(url=url, params=params, data=data)
+            result = response.json()['result']
+            videoSignDto = result['videoSignDto']
+            signature = videoSignDto['signature']
+            videoId = videoSignDto['videoId']
+
+            def movie(signature, videoId):
+                url = 'https://vod.study.163.com/eds/api/v1/vod/video'
+                params = {
+                    'videoId': videoId,
+                    'signature': signature,
+                    'clientType': '1',
+                }
+                response = self.session.post(url=url, params=params)
+                result = response.json()['result']
+                name = result['name']
+                videos = result['videos']
+                videoUrl = videos[Video_quality]['videoUrl']
+                y, m, d = re.findall('http://mooc2vod.stu.126.net/nos/hls/(\d+)/(\d+)/(\d+)', videoUrl)[0]
+                headers = {
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.85 Safari/537.36',
+                }
+                response = requests.get(url=videoUrl, headers=headers)
+                text = response.text
+                if '.mp4' not in name:
+                    name += '.mp4'
+                if os.path.exists('ts') == True:
+                    shutil.rmtree('ts')
+                if os.path.exists(fr'{path}\{name}') == True:
+                    print(fr'{name}已经存在!')
+                    return
+                else:
+                    self.handle_ts(text, y, m, d, name, path)
+
+            movie(signature, videoId)
+
+    # -------------------------------------------------------------------------------------------------
 
     def spider(self):
         b = os.path.exists('data')
@@ -608,18 +599,6 @@ class mooc_spider():
         courses_dic = self.get_courses(pagessize)
         for key, value in courses_dic.items():
             print(key, value[0], value[1])
-        print('-' * 100)
-        print('''
-           ▄██████▄   ▄██████▄          ▄████████  ▄██████▄     ▄████████       ▄█      ███     
-          ███    ███ ███    ███        ███    ███ ███    ███   ███    ███      ███  ▀█████████▄ 
-          ███    █▀  ███    ███        ███    █▀  ███    ███   ███    ███      ███▌    ▀███▀▀██ 
-         ▄███        ███    ███       ▄███▄▄▄     ███    ███  ▄███▄▄▄▄██▀      ███▌     ███   ▀ 
-        ▀▀███ ████▄  ███    ███      ▀▀███▀▀▀     ███    ███ ▀▀███▀▀▀▀▀        ███▌     ███     
-          ███    ███ ███    ███        ███        ███    ███ ▀███████████      ███      ███     
-          ███    ███ ███    ███        ███        ███    ███   ███    ███      ███      ███     
-          ████████▀   ▀██████▀         ███         ▀██████▀    ███    ███      █▀      ▄████▀   
-                                                               ███    ███                       
-        ''')
         while True:
             print('-' * 100)
             key = input("输入非纯字符将会自动退出\n请输入你要选择课程的序号:")
@@ -629,20 +608,53 @@ class mooc_spider():
                 if b == False:
                     os.mkdir(path)
                 courses_id = courses_dic[key][2]
-                print('-' * 100)
-                print('正在爬取 {} 课程 {} 测验'.format(courses_dic[key][1], courses_dic[key][0]))
-                test_name_id_dic = self.get_test_info(courses_id)
-                print('开始下载......')
-                for test_name, test_id in test_name_id_dic.items():
-                    time.sleep(random.randint(2, 5))
-                    aid, tid = self.submit_paper(test_id)
-                    time.sleep(1)
-                    paper_dic, Answer_list = self.get_paper(aid, tid)
-                    self.word(paper_dic, Answer_list, path, test_name)
+                text = self.get_course_text(courses_id)
+                dict_document, other_dict, dict_movie = self.get_info_name_id(text)
+                print('----------------------------')
+                print('0----》试卷\n'
+                      '1----》视频\n'
+                      '2----》pdf等资料\n'
+                      '3----》以上全部\n'
+                      '其它代表重新选择课程')
+
+                def paper():
+                    print('-' * 100)
+                    print('正在爬取 {} 课程 {} 测验'.format(courses_dic[key][1], courses_dic[key][0]))
+                    test_name_id_dic = self.get_test_info(text)
+                    print('开始下载......')
+                    for test_name, aid in test_name_id_dic.items():
+                        objective_dic = self.get_paper(aid)
+                        if objective_dic != {}:
+                            self.word(objective_dic, path, test_name)
+
+                while True:
+                    num = input('请输入:')
+                    if num == '0':
+                        paper()
+                    elif num == '1':
+                        Video_quality = input('0---》标清\n'
+                                              '1---》高清\n'
+                                              '2---》超清\n'
+                                              '请输入视频清晰度:')
+                        Video_quality = int(Video_quality)
+                        self.download_movie(dict_movie, path, Video_quality)
+                    elif num == '2':
+                        self.download_ppt(dict_document, path)
+                    elif num == '3':
+                        paper()
+                        Video_quality = input('0---》标清\n'
+                                              '1---》高清\n'
+                                              '2---》超清\n'
+                                              '请输入视频清晰度:')
+                        Video_quality = int(Video_quality)
+                        self.download_movie(dict_movie, path, Video_quality)
+                        self.download_ppt(dict_document, path)
+                    else:
+                        break
+
             else:
                 sys.exit()
 
 
 m = mooc_spider()
 m.spider()
-# pyinstaller -F MOOC.py
