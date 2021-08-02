@@ -10,7 +10,6 @@
 也可以公众号内回复mooc即可获取下载链接
 请扫下面的码
 
-
-![教程地址](https://www.bilibili.com/video/BV1EP4y1x71c?share_source=copy_web)
+- 教程地址 : [bilibili](https://www.bilibili.com/video/BV1EP4y1x71c?share_source=copy_web)
 
 ![二维码](https://github.com/Ajian-jyj/MOOC/blob/main/pic/code.jpg)
