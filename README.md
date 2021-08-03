@@ -18,4 +18,4 @@
 
 ![微信](https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/vx.jpg)
 
-![支付宝](https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/zfb.pn)
+![支付宝](https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/zfb.png)
