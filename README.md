@@ -15,7 +15,7 @@
 ![二维码](https://github.com/Ajian-jyj/MOOC/blob/main/pic/code.jpg)
 
 # 请我喝茶
-<img src="https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/vx.jpg" width="200" height="200" alt="微信"/><br/>
+<img src="https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/vx.jpg" width="480" height="600" alt="微信"/><br/>
 
 ![微信](https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/vx.jpg)
 
