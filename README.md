@@ -13,3 +13,9 @@
 - 教程地址 : [bilibili](https://www.bilibili.com/video/BV1EP4y1x71c?share_source=copy_web)
 
 ![二维码](https://github.com/Ajian-jyj/MOOC/blob/main/pic/code.jpg)
+
+# 请我喝茶
+
+![微信](https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/vx.jpg)
+
+![支付宝](https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/zfb.pn)
