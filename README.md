@@ -16,7 +16,4 @@
 
 # 请我喝茶
 <img src="https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/vx.jpg" width="480" height="600" alt="微信"/><br/>
-
-![微信](https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/vx.jpg)
-
-![支付宝](https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/zfb.png)
+<img src="https://github.com/Ajian-jyj/Ajian-jyj/blob/main/data/zfb.png" width="480" height="600" alt="支付宝"/><br/>
