@@ -1,0 +1,104 @@
+{
+    "status": {
+        "code": 0,
+        "message": ""
+    },
+    "results": {
+        "mocPaperDto": {
+            "tid": 1229858865,
+            "tname": null,
+            "aid": 2398140779,
+            "submitStatus": 1,
+            "type": 6,
+            "objectiveQList": [
+                {
+                    "id": 3268346810,
+                    "gmtCreate": 1583393501919,
+                    "gmtModified": 1583393501919,
+                    "stdAnswer": null,
+                    "examId": null,
+                    "testId": 1229858865,
+                    "type": 4,
+                    "fillblankType": null,
+                    "score": 2.0,
+                    "options": null,
+                    "position": 0,
+                    "allowUpload": null,
+                    "title": "<p>&#8203;\u57ce\u9547\u5c5e\u4e8e\u4eba\u7fa4\u6d3b\u52a8\u8981\u7d20\u3002</p>&lrm;",
+                    "plainTextTitle": "\u57ce\u9547\u5c5e\u4e8e\u4eba\u7fa4\u6d3b\u52a8\u8981\u7d20\u3002",
+                    "titleAttachment": "null",
+                    "description": null,
+                    "sampleAnswerJson": "null",
+                    "optionsDetail": null,
+                    "judgerules": "null",
+                    "analyse": null,
+                    "optionDtos": [
+                        {
+                            "id": 59273319192673,
+                            "content": "\u6b63\u786e",
+                            "answer": false,
+                            "analyse": null,
+                            "selectCount": null
+                        },
+                        {
+                            "id": 159273319192673,
+                            "content": "\u9519\u8bef",
+                            "answer": true,
+                            "analyse": null,
+                            "selectCount": null
+                        }
+                    ],
+                    "judgeDtos": null,
+                    "sampleAnswers": null,
+                    "titleAttachmentDtos": null,
+                    "ojTimeLimit": null,
+                    "ojMemLimit": null,
+                    "ojSupportedLanguage": null,
+                    "ojNeedInput": false,
+                    "ojSupportedLanguageList": null,
+                    "ojTryTime": null,
+                    "ojCases": null,
+                    "correctNumber": 0,
+                    "totalScore": 0.0,
+                    "correctRate": null,
+                    "avgScore": null,
+                    "mocQuestionTagDto": null
+                }
+            ],
+            "subjectiveQList": [],
+            "questions": null,
+            "answers": null,
+            "evaluateVo": null,
+            "showAnalysis": null,
+            "autoSubmit": false,
+            "allowSwitchPageCount": null,
+            "switchPageCount": null,
+            "submitType": null,
+            "deviceType": null,
+            "examId": null,
+            "name": null,
+            "deadline": null,
+            "totalScore": null,
+            "subjectiveTotalScore": null,
+            "objectiveTotalScore": null,
+            "subjectiveScore": null,
+            "objectiveScore": null,
+            "evaluateJudgeType": null,
+            "evaluateNeedTrain": null,
+            "evaluateStart": null,
+            "evaluateEnd": null,
+            "answererId": null,
+            "analyseEnable": null,
+            "scoreReleaseTime": null,
+            "examTime": null,
+            "startTime": null,
+            "submitTime": null,
+            "tryTime": null,
+            "usedTryCount": null,
+            "ip": null
+        }
+    },
+    "extraInfo": {
+        "currentTime": 1628915503154
+    }
+}
